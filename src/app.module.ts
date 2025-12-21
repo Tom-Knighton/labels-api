@@ -8,6 +8,9 @@ import { env } from './utils/env';
 import { ConfigModule } from '@nestjs/config';
 import { Home, HomeSchema } from './features/homes/home.schema';
 import { HomesService } from './features/homes/homes.service';
+import { User, UserSchema } from './features/users/user.schema';
+import { UsersController } from './features/users/users.controller';
+import { UsersService } from './features/users/users.service';
 
 @Module({
   imports: [
@@ -15,10 +18,11 @@ import { HomesService } from './features/homes/homes.service';
     MongooseModule.forRoot(env.MONGODB_URI),
     MongooseModule.forFeature([
       { name: ApiKey.name, schema: ApiKeySchema },
-      { name: Home.name, schema: HomeSchema }
+      { name: Home.name, schema: HomeSchema },
+      { name: User.name, schema: UserSchema }
     ])
   ],
-  controllers: [HomesController],
-  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService],
+  controllers: [HomesController, UsersController],
+  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService, UsersService],
 })
 export class AppModule { }

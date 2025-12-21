@@ -22,6 +22,10 @@ export class HomesService {
     return createdHome.save();
   }
 
+  async findByJoinCode(joinCode: string): Promise<HomeDocument | null> {
+    return this.homeModel.findOne({ joinCode }).exec();
+  }
+
   private generateJoinCode(): string {
     return randomBytes(3).toString('hex').toUpperCase();
   }
