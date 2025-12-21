@@ -6,14 +6,19 @@ import { ApiKeyService } from './auth/api-key.service';
 import { HomesController } from './features/homes/homes.controller';
 import { env } from './utils/env';
 import { ConfigModule } from '@nestjs/config';
+import { Home, HomeSchema } from './features/homes/home.schema';
+import { HomesService } from './features/homes/homes.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true}),
     MongooseModule.forRoot(env.MONGODB_URI),
-    MongooseModule.forFeature([{ name: ApiKey.name, schema: ApiKeySchema }])
+    MongooseModule.forFeature([
+      { name: ApiKey.name, schema: ApiKeySchema },
+      { name: Home.name, schema: HomeSchema }
+    ])
   ],
   controllers: [HomesController],
-  providers: [ApiKeyService, ApiKeyAuthGuard],
+  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService],
 })
 export class AppModule { }
