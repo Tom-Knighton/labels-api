@@ -14,36 +14,49 @@ export class MessagesService {
   ) { }
 
   async setImage(deviceId: string, file: MultipartFile): Promise<void> {
-    await this.queue.runExclusive(deviceId, 'setImage', async () => {
-      const device = await this.deviceModel.findById(deviceId).exec();
-      if (!device) {
-        throw new NotFoundException('Device not found');
-      }
-      const address = device.ble.address;
-      await this.sendAndWaitAck(address, 'setImage', { file });
-    });
+    try {
+      await this.queue.runExclusive(deviceId, 'setImage', async () => {
+        const device = await this.deviceModel.findById(deviceId).exec();
+        if (!device) {
+          throw new NotFoundException('Device not found');
+        }
+        const address = device.ble.address;
+        await this.sendAndWaitAck(address, 'setImage', { file });
+      });
+    } catch (error) {
+      console.error(`Failed to set image on device ${deviceId}:`, error);
+    }
   }
 
   async clearImage(deviceId: string): Promise<void> {
-    await this.queue.runExclusive(deviceId, 'clearImage', async () => {
-      const device = await this.deviceModel.findById(deviceId).exec();
-      if (!device) {
-        throw new NotFoundException('Device not found');
-      }
-      const address = device.ble.address;
-      await this.sendAndWaitAck(address, 'clearImage');
-    });
+    try {
+      await this.queue.runExclusive(deviceId, 'clearImage', async () => {
+        const device = await this.deviceModel.findById(deviceId).exec();
+        if (!device) {
+          throw new NotFoundException('Device not found');
+        }
+        const address = device.ble.address;
+        await this.sendAndWaitAck(address, 'clearImage');
+      });
+    } catch (error) {
+      console.error(`Failed to clear image on device ${deviceId}:`, error);
+    }
+
   }
 
   async flash(deviceId: string, color: string): Promise<void> {
-    await this.queue.runExclusive(deviceId, 'flash', async () => {
-      const device = await this.deviceModel.findById(deviceId).exec();
-      if (!device) {
-        throw new NotFoundException('Device not found');
-      }
-      const address = device.ble.address;
-      await this.sendAndWaitAck(address, 'flash', { color });
-    });
+    try {
+      await this.queue.runExclusive(deviceId, 'flash', async () => {
+        const device = await this.deviceModel.findById(deviceId).exec();
+        if (!device) {
+          throw new NotFoundException('Device not found');
+        }
+        const address = device.ble.address;
+        await this.sendAndWaitAck(address, 'flash', { color });
+      });
+    } catch (error) {
+      console.error(`Failed to flash device ${deviceId} with color ${color}:`, error);
+    }
   }
 
   private async sendAndWaitAck(
@@ -54,13 +67,13 @@ export class MessagesService {
   ): Promise<void> {
     switch (type) {
       case 'clearImage':
-        clearDevice(address);
+        await clearDevice(address);
         return;
       case 'setImage':
         return;
       case 'flash':
         const rgb = this.hexToRgb((payload as { color: string }).color) ?? { r: 255, g: 0, b: 0 };
-        flashRgb(address, { red: rgb.r, green: rgb.g, blue: rgb.b, offMs: 1000, onMs: 1000, workMs: 10000 });
+        await flashRgb(address, { red: rgb.r, green: rgb.g, blue: rgb.b, offMs: 1000, onMs: 1000, workMs: 10000 });
         return;
       default:
         throw new Error(`Unknown message type: ${type}`);
