@@ -14,6 +14,9 @@ import { UsersService } from './features/users/users.service';
 import { Device, DeviceSchema } from './features/devices/device.schema';
 import { DevicesController } from './features/devices/devices.controller';
 import { DevicesService } from './features/devices/devices.service';
+import { MessagesController } from './features/messages/messages.controller';
+import { MessagesService } from './features/messages/messages.service';
+import { MessagesQueueService } from './features/messages/messages-queue.service';
 
 @Module({
   imports: [
@@ -26,7 +29,7 @@ import { DevicesService } from './features/devices/devices.service';
       { name: Device.name, schema: DeviceSchema },
     ])
   ],
-  controllers: [HomesController, UsersController, DevicesController],
-  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService, UsersService, DevicesService],
+  controllers: [HomesController, UsersController, DevicesController, MessagesController],
+  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService, UsersService, DevicesService, MessagesService, MessagesQueueService],
 })
 export class AppModule { }
