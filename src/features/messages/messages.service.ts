@@ -1,39 +1,60 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { MultipartFile } from '@fastify/multipart';
 import { MessagesQueueService } from './messages-queue.service';
 import { clearDevice } from 'src/utils/ble';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Device, DeviceDocument } from '../devices/device.schema';
 
 @Injectable()
 export class MessagesService {
-  constructor(private readonly queue: MessagesQueueService) {}
+  constructor(
+    private readonly queue: MessagesQueueService,
+    @InjectModel(Device.name) private readonly deviceModel: Model<DeviceDocument>,
+  ) {}
 
   async setImage(deviceId: string, file: MultipartFile): Promise<void> {
     await this.queue.runExclusive(deviceId, 'setImage', async () => {
-      await this.sendAndWaitAck(deviceId, 'setImage', { file });
+      const device = await this.deviceModel.findById(deviceId).exec();
+      if (!device) {
+        throw new NotFoundException('Device not found');
+      }
+      const address = device.ble.address;
+      await this.sendAndWaitAck(address, 'setImage', { file });
     });
   }
 
   async clearImage(deviceId: string): Promise<void> {
     await this.queue.runExclusive(deviceId, 'clearImage', async () => {
-      await this.sendAndWaitAck(deviceId, 'clearImage');
+      const device = await this.deviceModel.findById(deviceId).exec();
+      if (!device) {
+        throw new NotFoundException('Device not found');
+      }
+      const address = device.ble.address;
+      await this.sendAndWaitAck(address, 'clearImage');
     });
   }
 
   async flash(deviceId: string, color: string): Promise<void> {
     await this.queue.runExclusive(deviceId, 'flash', async () => {
-      await this.sendAndWaitAck(deviceId, 'flash', { color });
+      const device = await this.deviceModel.findById(deviceId).exec();
+      if (!device) {
+        throw new NotFoundException('Device not found');
+      }
+      const address = device.ble.address;
+      await this.sendAndWaitAck(address, 'flash', { color });
     });
   }
 
   private async sendAndWaitAck(
-    deviceId: string,
+    address: string,
     type: 'setImage' | 'clearImage' | 'flash',
     payload?: unknown,
     timeoutMs = 10000,
   ): Promise<void> {
     switch (type) {
         case 'clearImage':
-            clearDevice(deviceId);
+            clearDevice(address);
             return;
         case 'setImage':
         case 'flash':
