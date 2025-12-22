@@ -241,8 +241,8 @@ export const flashRgb = async (addressOrId: string, params: RgbCommandParams): P
     const d = await connectAndUnlock(addressOrId);
     try {
         const payload = buildRgbCommand(params);
-        const withoutResponse = d.commandChar.properties.includes("writeWithoutResponse");
-        await d.commandChar.writeAsync(payload, withoutResponse);
+        await d.commandChar.writeAsync(payload, false);
+        await sleep(50);
     } finally {
         await d.peripheral.disconnectAsync().catch(() => undefined);
     }
