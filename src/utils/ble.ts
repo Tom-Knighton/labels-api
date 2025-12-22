@@ -123,7 +123,8 @@ const discoverByAddress = async (addressOrId: string, scanMs = 30000): Promise<P
         const onDiscover = (p: Peripheral) => {
             const addr = (p.address ?? "").toLowerCase();
             const id = (p.id ?? "").toLowerCase();
-            if (addr === target || id === target) {
+            const advertName = `WL${target.replace("66:66", "").replaceAll(":", "").toUpperCase()}`;
+            if (addr === target || id === target || p.advertisement.localName?.toUpperCase() === advertName) {
                 clearTimeout(timeout);
                 noble.removeListener("discover", onDiscover);
                 void noble.stopScanningAsync().catch(() => undefined);
