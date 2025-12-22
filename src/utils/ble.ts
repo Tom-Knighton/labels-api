@@ -196,11 +196,7 @@ const unlockAndSelectChars = async (
 };
 
 export const connectAndUnlock = async (addressOrId: string): Promise<ConnectDetails> => {
-    const peripheral = await discoverByAddress(addressOrId);
-
-    log('Connecting to peripheral', { id: peripheral.id, addr: peripheral.address });
-    await peripheral.connectAsync();
-    log('Connected');
+    const peripheral = await connectPeripheralWithRetry(addressOrId, 3);
 
     const services = await peripheral.discoverServicesAsync([]);
     const vendorService = findVendorService(services);
@@ -308,6 +304,33 @@ export const sendFrameNonCompressedA500A501 = async (
         await d.peripheral.disconnectAsync().catch(() => undefined);
         log('Disconnected');
     }
+};
+
+const connectPeripheralWithRetry = async (addressOrId: string, maxAttempts = 3): Promise<Peripheral> => {
+    let attempt = 0;
+    let lastErr: unknown = undefined;
+    while (attempt < maxAttempts) {
+        attempt++;
+        const peripheral = await discoverByAddress(addressOrId);
+        log('Connecting to peripheral', { id: peripheral.id, addr: peripheral.address, attempt });
+        try {
+            await peripheral.connectAsync();
+            log('Connected');
+            return peripheral;
+        } catch (e) {
+            lastErr = e;
+            log('Connect failed', e);
+            try {
+                await peripheral.disconnectAsync();
+            } catch {
+                // ignore
+            }
+            // Unknown Connection Identifier often indicates a transient controller issue.
+            // Back off briefly and retry by re-discovering.
+            await sleep(500);
+        }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('Failed to connect');
 };
 
 const waitForIdleOrTimeout = async (d: ConnectDetails, timeoutMs = 500): Promise<void> => {
