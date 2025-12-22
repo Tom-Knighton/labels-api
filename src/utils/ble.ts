@@ -25,6 +25,7 @@ const STANDARD_SERVICES = new Set(["1800", "1801"]);
 const A500_CHUNK_DATA_BYTES_DEFAULT = 200;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const log = (...args: unknown[]) => console.log('[BLE]', ...args);
 
 const normalizeUuid = (uuid: string) => uuid.replace(/-/g, "").toLowerCase();
 const is128BitUuid = (uuid: string) => normalizeUuid(uuid).length > 4;
@@ -97,12 +98,14 @@ const waitForPoweredOn = async (): Promise<void> => {
         const onState = (state: string) => {
             if (state === "poweredOn") {
                 noble.removeListener("stateChange", onState);
+                log('Adapter powered on');
                 resolve();
             } else if (state === "unsupported" || state === "unauthorized") {
                 noble.removeListener("stateChange", onState);
                 reject(new Error(`Bluetooth state: ${state}`));
             }
         };
+        log('Waiting for Bluetooth adapter to power on...');
         noble.on("stateChange", onState);
     });
 };
@@ -114,9 +117,11 @@ const discoverByAddress = async (addressOrId: string, scanMs = 30000): Promise<P
     await waitForPoweredOn();
 
     return await new Promise<Peripheral>((resolve, reject) => {
+        log('Starting scan for target', target, `timeout=${scanMs}ms`);
         const timeout = setTimeout(() => {
             noble.removeListener("discover", onDiscover);
             void noble.stopScanningAsync().catch(() => undefined);
+            log('Scan timeout; target not found', target);
             reject(new Error(`Peripheral not found within ${scanMs}ms: ${target}`));
         }, scanMs);
 
@@ -124,10 +129,14 @@ const discoverByAddress = async (addressOrId: string, scanMs = 30000): Promise<P
             const addr = (p.address ?? "").toLowerCase();
             const id = (p.id ?? "").toLowerCase();
             const advertName = `WL${target.replace("66:66", "").replaceAll(":", "").toUpperCase()}`;
+            if (p.advertisement?.localName) {
+                log('Discovered', { id, addr, name: p.advertisement.localName });
+            }
             if (addr === target || id === target || p.advertisement.localName?.toUpperCase() === advertName) {
                 clearTimeout(timeout);
                 noble.removeListener("discover", onDiscover);
                 void noble.stopScanningAsync().catch(() => undefined);
+                log('Matched target peripheral', { id, addr, name: p.advertisement?.localName });
                 resolve(p);
             }
         };
@@ -136,6 +145,7 @@ const discoverByAddress = async (addressOrId: string, scanMs = 30000): Promise<P
         void noble.startScanningAsync([], false).catch((e) => {
             clearTimeout(timeout);
             noble.removeListener("discover", onDiscover);
+            log('Failed to start scanning', e);
             reject(e);
         });
     });
@@ -188,18 +198,23 @@ const unlockAndSelectChars = async (
 export const connectAndUnlock = async (addressOrId: string): Promise<ConnectDetails> => {
     const peripheral = await discoverByAddress(addressOrId);
 
+    log('Connecting to peripheral', { id: peripheral.id, addr: peripheral.address });
     await peripheral.connectAsync();
+    log('Connected');
 
     const services = await peripheral.discoverServicesAsync([]);
     const vendorService = findVendorService(services);
     const vendorServiceUuid = normalizeUuid(vendorService.uuid);
+    log('Vendor service found', vendorServiceUuid);
 
     const characteristics = await vendorService.discoverCharacteristicsAsync([]);
 
     const writable = characteristics.filter(isWritable);
     const statusChar = characteristics.find(isStatusChar);
+    log('Characteristics', { total: characteristics.length, writable: writable.length, hasStatus: !!statusChar });
 
     const { securityChar, commandChar } = await unlockAndSelectChars(writable);
+    log('Unlocked and selected chars', { securityChar: securityChar.uuid, commandChar: commandChar.uuid });
 
     return {
         peripheral,
@@ -232,9 +247,13 @@ export const readStatus = async (d: ConnectDetails): Promise<{ busy: boolean; er
 export const clearDevice = async (addressOrId: string): Promise<void> => {
     const d = await connectAndUnlock(addressOrId);
     try {
+        log('Sending clear command');
         await d.commandChar.writeAsync(buildClearCommand(), false);
+        log('Clear command sent');
     } finally {
+        log('Disconnecting');
         await d.peripheral.disconnectAsync().catch(() => undefined);
+        log('Disconnected');
     }
 };
 
@@ -242,10 +261,14 @@ export const flashRgb = async (addressOrId: string, params: RgbCommandParams): P
     const d = await connectAndUnlock(addressOrId);
     try {
         const payload = buildRgbCommand(params);
+        log('Sending RGB command', params);
         await d.commandChar.writeAsync(payload, false);
-        await sleep(50);
+        log('RGB command sent (write-with-response)');
+        await waitForIdleOrTimeout(d, 500);
     } finally {
+        log('Disconnecting');
         await d.peripheral.disconnectAsync().catch(() => undefined);
+        log('Disconnected');
     }
 };
 
@@ -259,6 +282,7 @@ export const sendFrameNonCompressedA500A501 = async (
 
     const d = await connectAndUnlock(addressOrId);
     try {
+        log('Sending frame (non-compressed)', { totalBytes: frameBytes.length, chunkBytes, delayMs });
         const data = Buffer.from(frameBytes);
         const total = data.length;
 
@@ -278,7 +302,29 @@ export const sendFrameNonCompressedA500A501 = async (
 
         const a501 = buildA501Commit(total);
         await d.commandChar.writeAsync(a501, false);
+        log('Frame commit sent');
     } finally {
+        log('Disconnecting');
         await d.peripheral.disconnectAsync().catch(() => undefined);
+        log('Disconnected');
+    }
+};
+
+const waitForIdleOrTimeout = async (d: ConnectDetails, timeoutMs = 500): Promise<void> => {
+    const start = Date.now();
+    if (!d.statusChar) {
+        await sleep(Math.min(timeoutMs, 200));
+        return;
+    }
+    while (Date.now() - start < timeoutMs) {
+        try {
+            const s = await readStatus(d);
+            log('Status', s);
+            if (!s.busy) return;
+        } catch (e) {
+            log('Status read failed', e);
+            return;
+        }
+        await sleep(100);
     }
 };
