@@ -11,6 +11,9 @@ import { HomesService } from './features/homes/homes.service';
 import { User, UserSchema } from './features/users/user.schema';
 import { UsersController } from './features/users/users.controller';
 import { UsersService } from './features/users/users.service';
+import { Device, DeviceSchema } from './features/devices/device.schema';
+import { DevicesController } from './features/devices/devices.controller';
+import { DevicesService } from './features/devices/devices.service';
 
 @Module({
   imports: [
@@ -19,10 +22,11 @@ import { UsersService } from './features/users/users.service';
     MongooseModule.forFeature([
       { name: ApiKey.name, schema: ApiKeySchema },
       { name: Home.name, schema: HomeSchema },
-      { name: User.name, schema: UserSchema }
+      { name: User.name, schema: UserSchema },
+      { name: Device.name, schema: DeviceSchema },
     ])
   ],
-  controllers: [HomesController, UsersController],
-  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService, UsersService],
+  controllers: [HomesController, UsersController, DevicesController],
+  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService, UsersService, DevicesService],
 })
 export class AppModule { }

@@ -18,4 +18,17 @@ export class ApiKeyService {
 
     return doc != null;
   }
+
+  async getActiveApiKey(key: string): Promise<ApiKeyDocument | null> {
+    return this.apiKeyModel.findOne({ key, active: true }).exec();
+  }
+
+  async getUserIdByKey(key: string): Promise<string | null> {
+    const doc = await this.apiKeyModel
+      .findOne({ key, active: true })
+      .select({ userId: 1 })
+      .lean()
+      .exec();
+    return doc ? doc.userId : null;
+  }
 }
