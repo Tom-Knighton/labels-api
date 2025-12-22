@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { MultipartFile } from '@fastify/multipart';
 import { MessagesQueueService } from './messages-queue.service';
-import { clearDevice } from 'src/utils/ble';
+import { clearDevice, flashRgb } from 'src/utils/ble';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Device, DeviceDocument } from '../devices/device.schema';
@@ -11,7 +11,7 @@ export class MessagesService {
   constructor(
     private readonly queue: MessagesQueueService,
     @InjectModel(Device.name) private readonly deviceModel: Model<DeviceDocument>,
-  ) {}
+  ) { }
 
   async setImage(deviceId: string, file: MultipartFile): Promise<void> {
     await this.queue.runExclusive(deviceId, 'setImage', async () => {
@@ -53,15 +53,26 @@ export class MessagesService {
     timeoutMs = 10000,
   ): Promise<void> {
     switch (type) {
-        case 'clearImage':
-            clearDevice(address);
-            return;
-        case 'setImage':
-        case 'flash':
-            // Placeholder for actual implementation
-            return;
-        default:
-            throw new Error(`Unknown message type: ${type}`);
+      case 'clearImage':
+        clearDevice(address);
+        return;
+      case 'setImage':
+        return;
+      case 'flash':
+        const rgb = this.hexToRgb((payload as { color: string }).color) ?? { r: 255, g: 0, b: 0 };
+        flashRgb(address, { red: rgb.r, green: rgb.g, blue: rgb.b, offMs: 1000, onMs: 1000, workMs: 10000 });
+        return;
+      default:
+        throw new Error(`Unknown message type: ${type}`);
     }
+  }
+
+  private hexToRgb(hex) {
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
   }
 }
