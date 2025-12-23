@@ -20,7 +20,16 @@ export const BleInfoSchema = SchemaFactory.createForClass(BleInfo);
 @Schema({ _id: false })
 export class ShadowInfo {
   @Prop({ type: String, required: false, default: null })
-  currentImageAssetId?: string | null;
+  currentImagePreviewBase64?: string | null;
+
+  @Prop({ type: String, required: false, default: null })
+  currentImagePreviewType?: string | null;
+
+  @Prop({ type: Number, required: false, default: null })
+  currentImagePreviewWidth?: number | null;
+
+  @Prop({ type: Number, required: false, default: null })
+  currentImagePreviewHeight?: number | null;
 
   @Prop({ type: Boolean, required: true, default: false })
   isFlashing!: boolean;
@@ -33,6 +42,15 @@ export class ShadowInfo {
 
   @Prop({ type: String, required: false, default: null })
   lastError?: string | null;
+
+  @Prop({ type: [String], required: false, default: [] })
+  lastErrors?: string[];
+
+  @Prop({ type: Date, required: false, default: null })
+  lastFlashed?: Date | null;
+
+  @Prop({ type: Number, required: false, default: null })
+  flashedFor?: number | null;
 }
 
 export const ShadowInfoSchema = SchemaFactory.createForClass(ShadowInfo);

@@ -66,30 +66,31 @@ export const buildA501Commit = (pictureSize: number): Buffer => {
 };
 
 export const buildRgbCommand = (p: RgbCommandParams): Buffer => {
-    const buf = Buffer.alloc(2 + 3 + 2 + 2 + 4);
-    let o = 0;
+    const clampByte = (v: number): number => Math.max(0, Math.min(255, v | 0));
 
-    buf[o++] = 0x08;
-    buf[o++] = 0xa5;
+    const bytes: number[] = [];
 
-    buf[o++] = clampByte(p.red);
-    buf[o++] = clampByte(p.green);
-    buf[o++] = clampByte(p.blue);
+    bytes.push(0x08, 0xa5);
+    bytes.push(clampByte(p.red), clampByte(p.green), clampByte(p.blue));
 
-    buf.writeUInt16LE(p.onMs >>> 0, o);
-    o += 2;
-    buf.writeUInt16LE(p.offMs >>> 0, o);
-    o += 2;
-    buf.writeUInt32LE(p.workMs >>> 0, o);
-    o += 4;
+    const pushUint16Le = (v: number): void => {
+        const n = v >>> 0;
+        bytes.push(n & 0xff, (n >> 8) & 0xff);
+    };
 
-    return buf;
+    const pushUint32Le = (v: number): void => {
+        const n = v >>> 0;
+        bytes.push(n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >> 24) & 0xff);
+    };
+
+    pushUint16Le(p.onMs);
+    pushUint16Le(p.offMs);
+    pushUint32Le(p.workMs);
+
+    return Buffer.from(bytes);
 };
 
 export const buildClearCommand = (): Buffer => Buffer.from([0x04, 0xa5]);
-
-const clampByte = (v: number): number => Math.max(0, Math.min(255, v | 0));
-
 
 const waitForPoweredOn = async (): Promise<void> => {
     if (noble._state === "poweredOn") return;
@@ -110,7 +111,7 @@ const waitForPoweredOn = async (): Promise<void> => {
     });
 };
 
-const discoverByAddress = async (addressOrId: string, scanMs = 30000): Promise<Peripheral> => {
+const discoverByAddress = async (addressOrId: string, scanMs = 60000): Promise<Peripheral> => {
     const target = addressOrId.trim().toLowerCase();
     if (!target) throw new Error("Empty peripheral id/address");
 
@@ -299,6 +300,8 @@ export const sendFrameNonCompressedA500A501 = async (
         const a501 = buildA501Commit(total);
         await d.commandChar.writeAsync(a501, false);
         log('Frame commit sent');
+    } catch {
+        log('Error during frame send');
     } finally {
         log('Disconnecting');
         await d.peripheral.disconnectAsync().catch(() => undefined);
@@ -325,8 +328,7 @@ const connectPeripheralWithRetry = async (addressOrId: string, maxAttempts = 3):
             } catch {
                 // ignore
             }
-            // Unknown Connection Identifier often indicates a transient controller issue.
-            // Back off briefly and retry by re-discovering.
+
             await sleep(500);
         }
     }

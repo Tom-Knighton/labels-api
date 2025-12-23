@@ -8,6 +8,8 @@ import { QueuedMessageDto } from './dto/queued-message.dto';
 import type { FastifyRequest } from 'fastify';
 import type { MultipartFile } from '@fastify/multipart';
 import { MessagesQueueService } from './messages-queue.service';
+import { ApiKeyService } from 'src/auth/api-key.service';
+import { env } from 'src/utils/env';
 
 @ApiTags('Messages')
 @UseGuards(ApiKeyAuthGuard)
@@ -17,6 +19,7 @@ export class MessagesController {
   constructor(
     private readonly messagesService: MessagesService,
     private readonly queueService: MessagesQueueService,
+    private readonly authService: ApiKeyService,
   ) {}
 
   @Post(':deviceId/image')
@@ -27,10 +30,25 @@ export class MessagesController {
   async setImage(
     @Param('deviceId') deviceId: string,
     @Req() req: FastifyRequest,
-  ): Promise<{ accepted: true }> {
-    const file: MultipartFile = await (req as any).file();
-    await this.messagesService.setImage(deviceId, file);
-    return { accepted: true };
+  ): Promise<{ accepted: boolean }> {
+    try {
+      const file = await (req as any).file();
+      if (!file) {
+        return { accepted: false };
+      }
+
+      const apiKey = (req.headers as Record<string, string>)[env.API_KEY_HEADER.toLowerCase()] as string;
+      const userId = await this.authService.getUserIdByKey(apiKey);
+      
+      const fileBuffer = await this.messagesService.readFileFromMultipart(file);
+      
+      void this.messagesService.processImageInBackground(deviceId, fileBuffer, userId ?? undefined);
+      
+      return { accepted: true };
+    } catch (error) {
+      console.error('Error accepting image:', error);
+      return { accepted: false };
+    }
   }
 
   @Post(':deviceId/clear')
@@ -38,8 +56,11 @@ export class MessagesController {
   @ApiResponse({ status: 202, description: 'Clear command accepted' })
   async clearImage(
     @Param('deviceId') deviceId: string,
-  ): Promise<{ accepted: true }> {
-    await this.messagesService.clearImage(deviceId);
+    @Headers() headers: Record<string, string>,
+  ): Promise<{ accepted: boolean }> {
+    const apiKey = headers[env.API_KEY_HEADER.toLowerCase()] as string | undefined;
+    const userId = apiKey ? await this.authService.getUserIdByKey(apiKey) : undefined;
+    void this.messagesService.clearImageInBackground(deviceId, userId ?? undefined);
     return { accepted: true };
   }
 
@@ -49,8 +70,11 @@ export class MessagesController {
   async flash(
     @Param('deviceId') deviceId: string,
     @Body() dto: FlashDto,
-  ): Promise<{ accepted: true }> {
-    await this.messagesService.flash(deviceId, dto.color);
+    @Headers() headers: Record<string, string>,
+  ): Promise<{ accepted: boolean }> {
+    const apiKey = headers[env.API_KEY_HEADER.toLowerCase()] as string | undefined;
+    const userId = apiKey ? await this.authService.getUserIdByKey(apiKey) : undefined;
+    void this.messagesService.flashInBackground(deviceId, dto.color, userId ?? undefined);
     return { accepted: true };
   }
 

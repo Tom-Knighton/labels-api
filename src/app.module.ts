@@ -17,6 +17,8 @@ import { DevicesService } from './features/devices/devices.service';
 import { MessagesController } from './features/messages/messages.controller';
 import { MessagesService } from './features/messages/messages.service';
 import { MessagesQueueService } from './features/messages/messages-queue.service';
+import { ApnsToken, ApnsTokenSchema } from './features/users/apns.schema';
+import { ApnsService } from './features/notifications/apns.service';
 
 @Module({
   imports: [
@@ -27,9 +29,10 @@ import { MessagesQueueService } from './features/messages/messages-queue.service
       { name: Home.name, schema: HomeSchema },
       { name: User.name, schema: UserSchema },
       { name: Device.name, schema: DeviceSchema },
+      { name: ApnsToken.name, schema: ApnsTokenSchema },
     ])
   ],
   controllers: [HomesController, UsersController, DevicesController, MessagesController],
-  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService, UsersService, DevicesService, MessagesService, MessagesQueueService],
+  providers: [ApiKeyService, ApiKeyAuthGuard, HomesService, UsersService, DevicesService, MessagesService, MessagesQueueService, ApnsService],
 })
 export class AppModule { }

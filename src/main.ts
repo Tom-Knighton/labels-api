@@ -17,7 +17,6 @@ async function bootstrap() {
     transform: true,
   }));
 
-  // Register Fastify multipart to handle file uploads
   await app.register(multipart, {
     limits: {
       files: 1,

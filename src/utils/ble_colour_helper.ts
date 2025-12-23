@@ -1,8 +1,8 @@
-export const WIDTH = 400;
-export const HEIGHT = 300;
+export const WIDTH = 128;
+export const HEIGHT = 296;
+
 const PIXELS_PER_BYTE = 4;
-const BYTES_PER_ROW = WIDTH / PIXELS_PER_BYTE;
-export const FRAME_SIZE = BYTES_PER_ROW * HEIGHT; // 30_000
+
 export type ColourCode = 0 | 1 | 2 | 3;
 
 export const COLOUR_WHITE: ColourCode = 1;
@@ -10,13 +10,15 @@ export const COLOUR_BLACK: ColourCode = 0;
 export const COLOUR_RED: ColourCode = 3;
 export const COLOUR_YELLOW: ColourCode = 2;
 
-export const createFrame = (fill: ColourCode = COLOUR_WHITE): Uint8Array => {
-    const buffer = new Uint8Array(FRAME_SIZE);
+export const createFrame = (width: number, height: number, fill: ColourCode = COLOUR_WHITE): Uint8Array => {
+    const bytesPerRow = Math.ceil(width / PIXELS_PER_BYTE);
+    const frameSize = bytesPerRow * height;
+    const buffer = new Uint8Array(frameSize);
     if (fill === COLOUR_WHITE) return buffer;
 
-    for (let y = 0; y < HEIGHT; y += 1) {
-        for (let x = 0; x < WIDTH; x += 1) {
-            setPixel(buffer, x, y, fill);
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            setPixelSized(buffer, width, height, x, y, fill);
         }
     }
 
@@ -28,7 +30,7 @@ export const createFrameSized = (
     height: number,
     fill: ColourCode = COLOUR_WHITE,
 ): Uint8Array => {
-    const bytesPerRow = width / PIXELS_PER_BYTE;
+    const bytesPerRow = Math.ceil(width / PIXELS_PER_BYTE);
     const frameSize = bytesPerRow * height;
     const buffer = new Uint8Array(frameSize);
     if (fill === COLOUR_WHITE) return buffer;
@@ -44,13 +46,16 @@ export const createFrameSized = (
 
 export const setPixel = (
     buffer: Uint8Array,
+    width: number,
+    height: number,
     x: number,
     y: number,
     colour: ColourCode,
 ): void => {
-    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
 
-    const byteIndex = y * BYTES_PER_ROW + (x >> 2);
+    const bytesPerRow = Math.ceil(width / PIXELS_PER_BYTE);
+    const byteIndex = y * bytesPerRow + (x >> 2);
     const pixelInByte = x & 0b11;
 
     const shift = (3 - pixelInByte) * 2;
@@ -70,7 +75,7 @@ export const setPixelSized = (
 ): void => {
     if (x < 0 || x >= width || y < 0 || y >= height) return;
 
-    const bytesPerRow = width / PIXELS_PER_BYTE;
+    const bytesPerRow = Math.ceil(width / PIXELS_PER_BYTE);
     const byteIndex = y * bytesPerRow + (x >> 2);
     const pixelInByte = x & 0b11;
 
@@ -84,7 +89,7 @@ export const setPixelSized = (
 export type RgbaImage = {
     width: number;
     height: number;
-    data: Uint8ClampedArray | Uint8Array; // length = width * height * 4
+    data: Uint8ClampedArray | Uint8Array;
 };
 
 type PaletteEntry = {
@@ -97,7 +102,7 @@ type PaletteEntry = {
 const PALETTE: PaletteEntry[] = [
     { code: COLOUR_WHITE, r: 255, g: 255, b: 255 },
     { code: COLOUR_BLACK, r: 0, g: 0, b: 0 },
-    { code: COLOUR_RED, r: 220, g: 0, b: 0 },
+    { code: COLOUR_RED, r: 255, g: 0, b: 0 },
     { code: COLOUR_YELLOW, r: 255, g: 220, b: 0 },
 ];
 
@@ -128,37 +133,12 @@ export const quantisePixel = (
     return best.code;
 };
 
-export const convertRgbaToEslFrame = (img: RgbaImage): number[] => {
-    const { width: srcW, height: srcH, data } = img;
-
-    const frame = createFrame(COLOUR_WHITE);
-
-    const frameArr: Uint8Array<ArrayBufferLike> & any = Array.isArray(frame) ? frame : Array.from(frame);
-
-    for (let y = 0; y < HEIGHT; y += 1) {
-        const srcY = Math.min(
-            srcH - 1,
-            Math.max(0, Math.floor(((y + 0.5) * srcH) / HEIGHT)),
-        );
-
-        for (let x = 0; x < WIDTH; x += 1) {
-            const srcX = Math.min(
-                srcW - 1,
-                Math.max(0, Math.floor(((x + 0.5) * srcW) / WIDTH)),
-            );
-
-            const idx = (srcY * srcW + srcX) * 4;
-            const r = data[idx + 0];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
-            const a = data[idx + 3];
-
-            const colour = quantisePixel(r, g, b, a);
-            setPixel(frameArr, x, y, colour);
-        }
-    }
-
-    return frameArr;
+export const convertRgbaToEslFrame = (
+    img: RgbaImage,
+    width = WIDTH,
+    height = HEIGHT,
+): number[] => {
+    return convertRgbaToEslFrameSized(img, width, height);
 };
 
 export const convertRgbaToEslFrameSized = (
@@ -168,29 +148,58 @@ export const convertRgbaToEslFrameSized = (
 ): number[] => {
     const { width: srcW, height: srcH, data } = img;
 
-    const frame = createFrameSized(targetWidth, targetHeight, COLOUR_WHITE);
+    const needsRotation = targetWidth === 296 && targetHeight === 128;
+    const frameWidth = needsRotation ? 128 : targetWidth;
+    const frameHeight = needsRotation ? 296 : targetHeight;
+
+    const frame = createFrameSized(frameWidth, frameHeight, COLOUR_WHITE);
     const frameArr: Uint8Array<ArrayBufferLike> & any = Array.isArray(frame) ? frame : Array.from(frame);
 
-    for (let y = 0; y < targetHeight; y += 1) {
-        const srcY = Math.min(
-            srcH - 1,
-            Math.max(0, Math.floor(((y + 0.5) * srcH) / targetHeight)),
-        );
-
-        for (let x = 0; x < targetWidth; x += 1) {
+    if (needsRotation) {
+        for (let fy = 0; fy < frameHeight; fy += 1) {
             const srcX = Math.min(
                 srcW - 1,
-                Math.max(0, Math.floor(((x + 0.5) * srcW) / targetWidth)),
+                Math.max(0, Math.floor(((fy + 0.5) * srcW) / frameHeight)),
             );
 
-            const idx = (srcY * srcW + srcX) * 4;
-            const r = data[idx + 0];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
-            const a = data[idx + 3];
+            for (let fx = 0; fx < frameWidth; fx += 1) {
+                const srcY = Math.min(
+                    srcH - 1,
+                    Math.max(0, Math.floor(((fx + 0.5) * srcH) / frameWidth)),
+                );
 
-            const colour = quantisePixel(r, g, b, a);
-            setPixelSized(frameArr, targetWidth, targetHeight, x, y, colour);
+                const idx = (srcY * srcW + srcX) * 4;
+                const r = data[idx + 0];
+                const g = data[idx + 1];
+                const b = data[idx + 2];
+                const a = data[idx + 3];
+
+                const colour = quantisePixel(r, g, b, a);
+                setPixelSized(frameArr, frameWidth, frameHeight, fx, fy, colour);
+            }
+        }
+    } else {
+        for (let y = 0; y < targetHeight; y += 1) {
+            const srcY = Math.min(
+                srcH - 1,
+                Math.max(0, Math.floor(((y + 0.5) * srcH) / targetHeight)),
+            );
+
+            for (let x = 0; x < targetWidth; x += 1) {
+                const srcX = Math.min(
+                    srcW - 1,
+                    Math.max(0, Math.floor(((x + 0.5) * srcW) / targetWidth)),
+                );
+
+                const idx = (srcY * srcW + srcX) * 4;
+                const r = data[idx + 0];
+                const g = data[idx + 1];
+                const b = data[idx + 2];
+                const a = data[idx + 3];
+
+                const colour = quantisePixel(r, g, b, a);
+                setPixelSized(frameArr, targetWidth, targetHeight, x, y, colour);
+            }
         }
     }
 

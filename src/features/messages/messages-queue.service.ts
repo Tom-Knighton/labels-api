@@ -17,11 +17,15 @@ export class MessagesQueueService {
   private messages = new Map<string, QueuedMessage>();
   private messageIdCounter = 0;
 
-  async runExclusive<T>(
+  /**
+   * Queue a task to run in background without blocking the HTTP response.
+   * The task is queued per-device to maintain ordering, but doesn't await the result.
+   */
+  queueBackgroundTask<T>(
     deviceId: string,
     type: 'setImage' | 'clearImage' | 'flash',
     task: () => Promise<T>,
-  ): Promise<T> {
+  ): void {
     const messageId = `msg_${++this.messageIdCounter}_${Date.now()}`;
     const message: QueuedMessage = {
       id: messageId,
@@ -32,35 +36,68 @@ export class MessagesQueueService {
     };
     
     this.messages.set(messageId, message);
+    console.log(`[Queue] Enqueued ${type} for device ${deviceId} (msg: ${messageId})`);
 
-    const prev = this.queues.get(deviceId) ?? Promise.resolve();
-    const next = prev.then(async () => {
+    const prev = this.queues.get(deviceId);
+    console.log(`[Queue] Previous promise exists for device ${deviceId}:`, !!prev);
+    
+    const executeTask = async () => {
       message.status = 'processing';
       message.startedAt = new Date();
+      console.log(`[Queue] Starting ${type} for device ${deviceId}`);
+      
       try {
-        const result = await task();
+        let timeout = type === 'setImage' ? 180000 : 60000;
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`Task timeout after ${timeout / 1000} seconds`)), timeout);
+        });
+        
+        await Promise.race([task(), timeoutPromise]);
+        
         message.status = 'completed';
         message.completedAt = new Date();
-        return result;
+        console.log(`[Queue] Completed ${type} for device ${deviceId}`);
       } catch (err) {
         message.status = 'failed';
         message.completedAt = new Date();
         message.error = err instanceof Error ? err.message : String(err);
-        throw err;
+        console.error(`[Queue] Failed ${type} for device ${deviceId}:`, err);
       }
+      console.log(`[Queue] executeTask finished for ${type} device ${deviceId}`);
+    };
+    
+    const next = (prev ?? Promise.resolve())
+      .then(() => {
+        console.log(`[Queue] About to execute ${type} for device ${deviceId}`);
+        return executeTask();
+      })
+      .then(() => {
+        console.log(`[Queue] Task ${type} for device ${deviceId} fully resolved`);
+      })
+      .catch((err) => {
+        console.error(`[Queue] Uncaught error in ${type} for device ${deviceId}:`, err);
+        return undefined;
+      })
+      .finally(() => {
+        const current = this.queues.get(deviceId);
+        console.log(`[Queue] Finally block for ${type} device ${deviceId}, current === next:`, current === next);
+        if (current === next) {
+          this.queues.delete(deviceId);
+          console.log(`[Queue] Cleaned up queue for device ${deviceId}`);
+        } else {
+          console.log(`[Queue] Queue for device ${deviceId} already has next task`);
+        }
+      });
+    
+    this.queues.set(deviceId, next);
+    console.log(`[Queue] Stored promise for device ${deviceId}`);
+    
+    setImmediate(() => {
+      console.log(`[Queue] setImmediate triggered for ${type} device ${deviceId}`);
+      next.catch(() => {
+        // Already handled above
+      });
     });
-    
-    this.queues.set(deviceId, next.catch(() => {}));
-    
-    try {
-      const result = await next;
-      return result;
-    } finally {
-      const current = this.queues.get(deviceId);
-      if (current === next || current === (next as Promise<unknown>).catch(() => {})) {
-        this.queues.delete(deviceId);
-      }
-    }
   }
 
   getQueuedMessages(deviceId: string): QueuedMessage[] {

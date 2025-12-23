@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -7,6 +7,8 @@ import { Public } from 'src/auth/public.decorator';
 import { ApiKeyService } from 'src/auth/api-key.service';
 import { env } from 'src/utils/env';
 import { ApiKeyAuthGuard } from 'src/auth/api-key-auth.guard';
+import { RegisterApnsDto } from './dto/register-apns.dto';
+import { ApnsTokenDto } from './dto/apns-token.dto';
 
 @ApiTags('Users')
 @UseGuards(ApiKeyAuthGuard)
@@ -68,5 +70,44 @@ export class UsersController {
 
         const result =  UserResponseDto.fromDocument(user.user, user.apiKey);
         return result;
+    }
+
+    @Get('/me/apns')
+    @ApiOperation({ summary: 'List APNs tokens for current user' })
+    @ApiResponse({ status: 200, description: 'List of APNs tokens', type: [ApnsTokenDto] })
+    async listMyApns(@Headers() headers: Record<string, string>): Promise<ApnsTokenDto[]> {
+        const apiKey = headers[env.API_KEY_HEADER.toLowerCase()] as string;
+        const userId = await this.authService.getUserIdByKey(apiKey);
+        if (!userId) {
+            throw new NotFoundException('User not found');
+        }
+        const tokens = await this.usersService.listApnsTokens(userId);
+        return tokens.map(ApnsTokenDto.fromDocument);
+    }
+
+    @Post('/me/apns')
+    @ApiOperation({ summary: 'Register or update an APNs token for current user' })
+    @ApiResponse({ status: 201, description: 'APNs token registered', type: ApnsTokenDto })
+    async registerMyApns(@Headers() headers: Record<string, string>, @Body() body: RegisterApnsDto): Promise<ApnsTokenDto> {
+        const apiKey = headers[env.API_KEY_HEADER.toLowerCase()] as string;
+        const userId = await this.authService.getUserIdByKey(apiKey);
+        if (!userId) {
+            throw new NotFoundException('User not found');
+        }
+        const doc = await this.usersService.registerApnsToken(userId, body.token, body.device);
+        return ApnsTokenDto.fromDocument(doc);
+    }
+
+    @Delete('/me/apns/:token')
+    @ApiOperation({ summary: 'Delete an APNs token for current user' })
+    @ApiResponse({ status: 200, description: 'Deletion result' })
+    async deleteMyApns(@Headers() headers: Record<string, string>, @Param('token') token: string): Promise<{ success: boolean }> {
+        const apiKey = headers[env.API_KEY_HEADER.toLowerCase()] as string;
+        const userId = await this.authService.getUserIdByKey(apiKey);
+        if (!userId) {
+            throw new NotFoundException('User not found');
+        }
+        const success = await this.usersService.deleteApnsToken(userId, token);
+        return { success };
     }
 }

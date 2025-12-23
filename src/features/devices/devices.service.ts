@@ -25,7 +25,6 @@ export class DevicesService {
       throw new NotFoundException('User not found');
     }
 
-    // Check if user already has a device with the same name
     const existingByName = await this.deviceModel.findOne({
       ownerUserId: user._id,
       name: dto.name,
@@ -35,7 +34,6 @@ export class DevicesService {
       throw new ConflictException('You already have a device with this name');
     }
 
-    // Check if user already has a device with the same address
     const existingByAddress = await this.deviceModel.findOne({
       ownerUserId: user._id,
       'ble.address': dto.address,
