@@ -35,7 +35,7 @@ export class DevicesService {
     }
 
     const existingByAddress = await this.deviceModel.findOne({
-      ownerUserId: user._id,
+      homeId: user.homeId,
       'ble.address': dto.address,
     }).exec();
 

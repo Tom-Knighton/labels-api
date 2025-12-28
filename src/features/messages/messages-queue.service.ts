@@ -47,7 +47,7 @@ export class MessagesQueueService {
       console.log(`[Queue] Starting ${type} for device ${deviceId}`);
       
       try {
-        let timeout = type === 'setImage' ? 180000 : 60000;
+        let timeout = type === 'setImage' ? 240000 : 180000;
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error(`Task timeout after ${timeout / 1000} seconds`)), timeout);
         });

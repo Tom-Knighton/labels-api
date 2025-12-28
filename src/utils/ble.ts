@@ -111,7 +111,7 @@ const waitForPoweredOn = async (): Promise<void> => {
     });
 };
 
-const discoverByAddress = async (addressOrId: string, scanMs = 60000): Promise<Peripheral> => {
+const discoverByAddress = async (addressOrId: string, scanMs = 90000): Promise<Peripheral> => {
     const target = addressOrId.trim().toLowerCase();
     if (!target) throw new Error("Empty peripheral id/address");
 

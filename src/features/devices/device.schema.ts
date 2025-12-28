@@ -5,7 +5,7 @@ export type DeviceDocument = HydratedDocument<Device>;
 
 @Schema({ _id: false })
 export class BleInfo {
-  @Prop({ type: String, required: true, unique: true })
+  @Prop({ type: String, required: true })
   address!: string;
 
   @Prop({ type: Number, required: true, default: 400 })
@@ -74,3 +74,5 @@ export class Device {
 }
 
 export const DeviceSchema = SchemaFactory.createForClass(Device);
+
+DeviceSchema.index({ homeId: 1, 'ble.address': 1 }, { unique: true });
