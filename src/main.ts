@@ -7,7 +7,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import multipart from '@fastify/multipart';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  const adapter = new FastifyAdapter({
+    ignoreDuplicateSlashes: true,
+  });
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter);
 
   app.enableShutdownHooks();
 
